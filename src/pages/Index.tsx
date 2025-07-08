@@ -1,15 +1,26 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Mic, MicOff, Volume2, Book, Trophy, Users, Globe } from 'lucide-react';
+import { Mic, MicOff, Volume2, Book, Trophy, Users, Globe, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
+import { useVoiceTutor } from '@/hooks/useVoiceTutor';
 
 const Index = () => {
-  const [isListening, setIsListening] = useState(false);
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [currentUser, setCurrentUser] = useState(null);
+
+  const {
+    isListening,
+    isProcessing,
+    currentQuestion,
+    currentAnswer,
+    conversationHistory,
+    startListening,
+    stopListening,
+    speakAnswer,
+    isSupported
+  } = useVoiceTutor(selectedLanguage);
 
   const languages = ['English', 'Yoruba', 'Igbo', 'Hausa'];
   
@@ -29,11 +40,16 @@ const Index = () => {
   ];
 
   const toggleVoice = () => {
-    setIsListening(!isListening);
-    if (!isListening) {
-      toast.success('Voice activated! Ask me any STEM question.');
-    } else {
+    if (isListening) {
+      stopListening();
       toast.info('Voice deactivated.');
+    } else {
+      if (!isSupported) {
+        toast.error('Speech recognition is not supported in this browser');
+        return;
+      }
+      startListening();
+      toast.success('Voice activated! Ask me any STEM question.');
     }
   };
 
@@ -126,10 +142,11 @@ const Index = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-center space-x-4">
+            <div className="flex items-center justify-center space-x-4 mb-4">
               <Button
                 onClick={toggleVoice}
                 size="lg"
+                disabled={isProcessing || !isSupported}
                 className={`rounded-full w-16 h-16 ${
                   isListening 
                     ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
@@ -140,13 +157,53 @@ const Index = () => {
               </Button>
               <div className="text-center">
                 <p className="font-semibold">
-                  {isListening ? 'Listening...' : 'Tap to ask a question'}
+                  {isProcessing ? 'Processing...' : isListening ? 'Listening...' : 'Tap to ask a question'}
                 </p>
                 <p className="text-sm text-purple-100">
-                  {isListening ? 'Speak now in ' + selectedLanguage : 'Voice in ' + selectedLanguage}
+                  {isProcessing ? 'Thinking about your question' : isListening ? 'Speak now in ' + selectedLanguage : 'Voice in ' + selectedLanguage}
                 </p>
               </div>
             </div>
+
+            {/* Current Q&A Display */}
+            {(currentQuestion || currentAnswer) && (
+              <div className="space-y-3 bg-white/10 rounded-lg p-4">
+                {currentQuestion && (
+                  <div className="flex items-start space-x-2">
+                    <MessageSquare className="w-4 h-4 mt-1 text-purple-200" />
+                    <div>
+                      <p className="text-sm text-purple-100">Your Question:</p>
+                      <p className="font-medium">{currentQuestion}</p>
+                    </div>
+                  </div>
+                )}
+                {currentAnswer && (
+                  <div className="flex items-start space-x-2">
+                    <div className="w-4 h-4 mt-1 bg-purple-200 rounded-full"></div>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm text-purple-100">AI Tutor Response:</p>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => speakAnswer(currentAnswer)}
+                          className="text-white hover:bg-white/20 h-auto py-1 px-2"
+                        >
+                          <Volume2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                      <p className="text-sm leading-relaxed">{currentAnswer}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isSupported && (
+              <div className="text-center text-purple-100 text-sm">
+                Speech recognition is not supported in this browser
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -225,6 +282,43 @@ const Index = () => {
             ))}
           </div>
         </div>
+
+        {/* Conversation History */}
+        {conversationHistory.length > 0 && (
+          <div>
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Questions</h3>
+            <div className="space-y-3">
+              {conversationHistory.slice(-3).reverse().map((conversation, index) => (
+                <Card key={index} className="border-0 shadow-md">
+                  <CardContent className="p-4">
+                    <div className="space-y-2">
+                      <div className="flex items-start space-x-2">
+                        <MessageSquare className="w-4 h-4 mt-1 text-gray-400" />
+                        <p className="text-sm text-gray-600">Q: {conversation.question}</p>
+                      </div>
+                      <div className="flex items-start space-x-2">
+                        <div className="w-4 h-4 mt-1 bg-purple-500 rounded-full"></div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                            <p className="text-sm text-gray-900 leading-relaxed">A: {conversation.answer}</p>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => speakAnswer(conversation.answer)}
+                              className="text-gray-500 hover:text-gray-700 h-auto py-1 px-2"
+                            >
+                              <Volume2 className="w-3 h-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Bottom Navigation Placeholder */}
         <div className="h-20"></div>
