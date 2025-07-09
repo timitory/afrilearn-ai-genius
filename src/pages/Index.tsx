@@ -2,13 +2,19 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Mic, MicOff, Volume2, Book, Trophy, Users, Globe, MessageSquare } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Mic, MicOff, Volume2, Book, Trophy, Users, Globe, MessageSquare, Star, Award } from 'lucide-react';
 import { toast } from 'sonner';
 import { useVoiceTutor } from '@/hooks/useVoiceTutor';
+import { CourseService, Course, UserProgress } from '@/services/CourseService';
+import CourseDetail from '@/components/CourseDetail';
 
 const Index = () => {
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [currentUser, setCurrentUser] = useState(null);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
 
   const {
     isListening,
@@ -23,20 +29,19 @@ const Index = () => {
   } = useVoiceTutor(selectedLanguage);
 
   const languages = ['English', 'Yoruba', 'Igbo', 'Hausa'];
-  
-  const stemSubjects = [
-    { name: 'Mathematics', icon: '📊', color: 'bg-blue-500', lessons: 45 },
-    { name: 'Physics', icon: '⚡', color: 'bg-purple-500', lessons: 38 },
-    { name: 'Chemistry', icon: '🧪', color: 'bg-green-500', lessons: 42 },
-    { name: 'Biology', icon: '🧬', color: 'bg-red-500', lessons: 36 },
-    { name: 'Coding', icon: '💻', color: 'bg-orange-500', lessons: 28 }
-  ];
+
+  useEffect(() => {
+    if (currentUser) {
+      setCourses(CourseService.getCourses());
+      setUserProgress(CourseService.getUserProgress());
+    }
+  }, [currentUser]);
 
   const achievements = [
     { name: 'First Steps', icon: '🎯', earned: true },
     { name: 'Quick Learner', icon: '⚡', earned: true },
-    { name: 'Streak Master', icon: '🔥', earned: false },
-    { name: 'Challenge Champion', icon: '👑', earned: false }
+    { name: 'Streak Master', icon: '🔥', earned: userProgress?.currentStreak >= 7 },
+    { name: 'Challenge Champion', icon: '👑', earned: userProgress?.totalLessonsCompleted >= 20 }
   ];
 
   const toggleVoice = () => {
@@ -57,6 +62,26 @@ const Index = () => {
     setCurrentUser({ name: 'Kemi', level: 'SS2', points: 1250 });
     toast.success('Welcome back, Kemi!');
   };
+
+  const handleCourseClick = (course: Course) => {
+    setSelectedCourse(course);
+  };
+
+  const handleLessonComplete = (courseId: string, lessonId: string) => {
+    CourseService.completeLesson(courseId, lessonId);
+    setCourses(CourseService.getCourses());
+    setUserProgress(CourseService.getUserProgress());
+  };
+
+  if (selectedCourse) {
+    return (
+      <CourseDetail
+        course={selectedCourse}
+        onBack={() => setSelectedCourse(null)}
+        onLessonComplete={handleLessonComplete}
+      />
+    );
+  }
 
   if (!currentUser) {
     return (
@@ -119,12 +144,18 @@ const Index = () => {
             </div>
             <div>
               <h2 className="font-semibold text-gray-900">{currentUser.name}</h2>
-              <p className="text-sm text-gray-500">{currentUser.level} • {currentUser.points} points</p>
+              <p className="text-sm text-gray-500">{currentUser.level} • {userProgress?.points || 0} points</p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
-            <Globe className="w-5 h-5 text-gray-500" />
-            <span className="text-sm text-gray-600">{selectedLanguage}</span>
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center space-x-1">
+              <Star className="w-4 h-4 text-yellow-500" />
+              <span className="text-sm font-medium">#{userProgress?.classRank || 3}</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Globe className="w-5 h-5 text-gray-500" />
+              <span className="text-sm text-gray-600">{selectedLanguage}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -216,21 +247,38 @@ const Index = () => {
             </Button>
           </div>
           <div className="grid grid-cols-1 gap-3">
-            {stemSubjects.map((subject, index) => (
-              <Card key={index} className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-pointer">
+            {courses.map((course) => (
+              <Card 
+                key={course.id} 
+                className="border-0 shadow-md hover:shadow-lg transition-shadow cursor-pointer"
+                onClick={() => handleCourseClick(course)}
+              >
                 <CardContent className="p-4">
                   <div className="flex items-center space-x-4">
-                    <div className={`w-12 h-12 ${subject.color} rounded-lg flex items-center justify-center text-white text-xl`}>
-                      {subject.icon}
+                    <div className={`w-12 h-12 ${course.color} rounded-lg flex items-center justify-center text-white text-xl`}>
+                      {course.icon}
                     </div>
                     <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900">{subject.name}</h4>
-                      <p className="text-sm text-gray-500">{subject.lessons} lessons available</p>
+                      <h4 className="font-semibold text-gray-900">{course.name}</h4>
+                      <p className="text-sm text-gray-500">{course.totalLessons} lessons • {course.difficulty}</p>
+                      <div className="mt-2">
+                        <div className="flex justify-between text-xs text-gray-600 mb-1">
+                          <span>{course.completedLessons}/{course.totalLessons} completed</span>
+                          <span>{course.progress}%</span>
+                        </div>
+                        <Progress value={course.progress} className="h-1" />
+                      </div>
                     </div>
                     <div className="text-right">
-                      <Badge variant="secondary" className="bg-green-100 text-green-700">
+                      <Badge variant="secondary" className="bg-green-100 text-green-700 mb-2">
                         Available Offline
                       </Badge>
+                      {course.completedLessons > 0 && (
+                        <div className="flex items-center space-x-1 text-xs text-orange-600">
+                          <Award className="w-3 h-3" />
+                          <span>In Progress</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -244,21 +292,21 @@ const Index = () => {
           <Card className="border-0 shadow-md text-center">
             <CardContent className="p-4">
               <Book className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">24</p>
+              <p className="text-2xl font-bold text-gray-900">{userProgress?.totalLessonsCompleted || 0}</p>
               <p className="text-sm text-gray-500">Lessons Completed</p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-md text-center">
             <CardContent className="p-4">
               <Trophy className="w-8 h-8 text-yellow-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">7</p>
+              <p className="text-2xl font-bold text-gray-900">{userProgress?.currentStreak || 0}</p>
               <p className="text-sm text-gray-500">Day Streak</p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-md text-center">
             <CardContent className="p-4">
               <Users className="w-8 h-8 text-green-500 mx-auto mb-2" />
-              <p className="text-2xl font-bold text-gray-900">3rd</p>
+              <p className="text-2xl font-bold text-gray-900">{userProgress?.classRank || 3}rd</p>
               <p className="text-sm text-gray-500">Class Rank</p>
             </CardContent>
           </Card>
@@ -277,6 +325,9 @@ const Index = () => {
                   <p className={`font-semibold ${achievement.earned ? 'text-orange-700' : 'text-gray-500'}`}>
                     {achievement.name}
                   </p>
+                  {achievement.earned && (
+                    <Badge className="mt-2 bg-green-500 text-white">Earned</Badge>
+                  )}
                 </CardContent>
               </Card>
             ))}
