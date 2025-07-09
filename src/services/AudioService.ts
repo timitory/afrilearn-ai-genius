@@ -45,7 +45,7 @@ export class AudioService {
       'math-1': {
         'English': 'Algebra is a branch of mathematics that uses symbols and letters to represent numbers and quantities in formulas and equations. It allows us to solve problems by finding unknown values.',
         'Yoruba': 'Algebra jẹ ẹka ti mathematiki ti o nlo awọn ami ati lẹta lati soju awọn nọmba ati awọn iwọn ninu awọn agbekalẹ ati awọn idogba. O gba wa laaye lati yanju awọn isoró nipa wiwa awọn iye ti a ko mọ.',
-        'Igbo': 'Algebra bụ ngalaba nke mgbakọ na mwepụ nke na-eji akara na mkpụrụedemede anọchi anya ọnụọgụgụ na ọnụọgụgụ na usoro na nhata. Ọ na-enye anyị ohere idozi nsogbu site n'ịchọta ụkpụrụ ndị a na-amaghị.',
+        'Igbo': 'Algebra bụ ngalaba nke mgbakọ na mwepụ nke na-eji akara na mkpụrụedemede anọchi anya ọnụọgụgụ na ọnụọgụgụ na usoro na nhata. Ọ na-enye anyị ohere idozi nsogbu site n\'ịchọta ụkpụrụ ndị a na-amaghị.',
         'Hausa': 'Algebra wani reshe ne na lissafi wanda ke amfani da alamomi da haruffa don wakiltar lambobi da adadi a cikin dabbobi da ma\'auni. Yana ba mu damar warware matsaloli ta hanyar gano kimar da ba mu sani ba.'
       },
       'physics-1': {
