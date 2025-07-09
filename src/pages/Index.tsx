@@ -15,6 +15,8 @@ import CourseDetail from '@/components/CourseDetail';
 import BottomNavigation from '@/components/BottomNavigation';
 
 const Index = () => {
+  console.log('Index component rendering...');
+  
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('English');
@@ -38,6 +40,7 @@ const Index = () => {
   const languages = ['English', 'Yoruba', 'Igbo', 'Hausa'];
 
   useEffect(() => {
+    console.log('Index useEffect - currentUser:', currentUser);
     if (currentUser) {
       setCourses(CourseService.getCourses());
       setUserProgress(CourseService.getUserProgress());
@@ -66,6 +69,7 @@ const Index = () => {
   };
 
   const handleAuthSuccess = (authUser: User, profile: UserProfile) => {
+    console.log('Auth success in Index:', authUser, profile);
     setUser(authUser);
     setUserProfile(profile);
     
@@ -76,6 +80,7 @@ const Index = () => {
   };
 
   const handleSignOut = async () => {
+    console.log('Signing out...');
     await AuthService.signOut();
     setUser(null);
     setUserProfile(null);
@@ -98,6 +103,8 @@ const Index = () => {
     setUserProgress(CourseService.getUserProgress());
   };
 
+  console.log('Index render state - user:', user, 'userProfile:', userProfile);
+
   if (selectedCourse) {
     return (
       <CourseDetail
@@ -110,12 +117,16 @@ const Index = () => {
   }
 
   if (!user || !userProfile) {
+    console.log('Rendering AuthContainer');
     return <AuthContainer onAuthSuccess={handleAuthSuccess} />;
   }
 
   if (userProfile.role === 'admin') {
+    console.log('Rendering AdminDashboard');
     return <AdminDashboard profile={userProfile} onSignOut={handleSignOut} />;
   }
+
+  console.log('Rendering student dashboard');
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-green-50">
