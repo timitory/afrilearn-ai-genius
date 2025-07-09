@@ -1,4 +1,8 @@
 import { useState, useEffect } from 'react';
+import { User } from '@supabase/supabase-js';
+import { UserProfile, AuthService } from '@/services/AuthService';
+import AuthContainer from '@/components/auth/AuthContainer';
+import AdminDashboard from '@/components/dashboard/AdminDashboard';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +15,8 @@ import CourseDetail from '@/components/CourseDetail';
 import BottomNavigation from '@/components/BottomNavigation';
 
 const Index = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState('English');
   const [currentUser, setCurrentUser] = useState(null);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -59,6 +65,24 @@ const Index = () => {
     }
   };
 
+  const handleAuthSuccess = (authUser: User, profile: UserProfile) => {
+    setUser(authUser);
+    setUserProfile(profile);
+    
+    if (profile.role === 'student') {
+      setCourses(CourseService.getCourses());
+      setUserProgress(CourseService.getUserProgress());
+    }
+  };
+
+  const handleSignOut = async () => {
+    await AuthService.signOut();
+    setUser(null);
+    setUserProfile(null);
+    setCourses([]);
+    setUserProgress(null);
+  };
+
   const handleLogin = () => {
     setCurrentUser({ name: 'Kemi', level: 'SS2', points: 1250 });
     toast.success('Welcome back, Kemi!');
@@ -85,54 +109,12 @@ const Index = () => {
     );
   }
 
-  if (!currentUser) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-green-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md shadow-2xl border-0">
-          <CardHeader className="text-center space-y-4">
-            <div className="mx-auto w-20 h-20 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-3xl">
-              🧠
-            </div>
-            <CardTitle className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-              STEM Learn AI
-            </CardTitle>
-            <CardDescription className="text-base">
-              Your AI-powered STEM tutor for African students
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            <div className="space-y-3">
-              <label className="text-sm font-medium text-gray-700">Choose your language</label>
-              <div className="grid grid-cols-2 gap-2">
-                {languages.map((lang) => (
-                  <Button
-                    key={lang}
-                    variant={selectedLanguage === lang ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setSelectedLanguage(lang)}
-                    className={selectedLanguage === lang ? "bg-orange-500 hover:bg-orange-600" : ""}
-                  >
-                    {lang}
-                  </Button>
-                ))}
-              </div>
-            </div>
-            <Button 
-              onClick={handleLogin}
-              className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold py-3"
-            >
-              Start Learning
-            </Button>
-            <div className="text-center space-y-2">
-              <p className="text-xs text-gray-500">New to STEM Learn AI?</p>
-              <Button variant="ghost" className="text-orange-600 hover:text-orange-700">
-                Create Account
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+  if (!user || !userProfile) {
+    return <AuthContainer onAuthSuccess={handleAuthSuccess} />;
+  }
+
+  if (userProfile.role === 'admin') {
+    return <AdminDashboard profile={userProfile} onSignOut={handleSignOut} />;
   }
 
   return (
@@ -142,11 +124,11 @@ const Index = () => {
         <div className="px-4 py-3 flex items-center justify-between">
           <div className="flex items-center space-x-3">
             <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold">
-              {currentUser.name[0]}
+              {userProfile.full_name[0]}
             </div>
             <div>
-              <h2 className="font-semibold text-gray-900">{currentUser.name}</h2>
-              <p className="text-sm text-gray-500">{currentUser.level} • {userProgress?.points || 0} points</p>
+              <h2 className="font-semibold text-gray-900">{userProfile.full_name}</h2>
+              <p className="text-sm text-gray-500">{userProfile.institution_name} • {userProgress?.points || 0} points</p>
             </div>
           </div>
           <div className="flex items-center space-x-4">
@@ -158,6 +140,9 @@ const Index = () => {
               <Globe className="w-5 h-5 text-gray-500" />
               <span className="text-sm text-gray-600">{selectedLanguage}</span>
             </div>
+            <Button onClick={handleSignOut} variant="outline" size="sm">
+              Sign Out
+            </Button>
           </div>
         </div>
       </div>
