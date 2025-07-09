@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useVoiceTutor } from '@/hooks/useVoiceTutor';
 import { CourseService, Course, UserProgress } from '@/services/CourseService';
 import CourseDetail from '@/components/CourseDetail';
+import BottomNavigation from '@/components/BottomNavigation';
 
 const Index = () => {
   const [selectedLanguage, setSelectedLanguage] = useState('English');
@@ -79,6 +80,7 @@ const Index = () => {
         course={selectedCourse}
         onBack={() => setSelectedCourse(null)}
         onLessonComplete={handleLessonComplete}
+        selectedLanguage={selectedLanguage}
       />
     );
   }
@@ -376,28 +378,7 @@ const Index = () => {
       </div>
       
       {/* Fixed Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t shadow-lg">
-        <div className="grid grid-cols-5 gap-1 p-2">
-          {[
-            { icon: '🏠', label: 'Home', active: true },
-            { icon: '📚', label: 'Courses', active: false },
-            { icon: '🏆', label: 'Challenges', active: false },
-            { icon: '💼', label: 'Career', active: false },
-            { icon: '👤', label: 'Profile', active: false }
-          ].map((tab, index) => (
-            <Button
-              key={index}
-              variant="ghost"
-              className={`flex flex-col items-center space-y-1 h-auto py-2 ${
-                tab.active ? 'text-orange-600' : 'text-gray-500'
-              }`}
-            >
-              <span className="text-lg">{tab.icon}</span>
-              <span className="text-xs">{tab.label}</span>
-            </Button>
-          ))}
-        </div>
-      </div>
+      <BottomNavigation currentRoute="/" />
     </div>
   );
 };

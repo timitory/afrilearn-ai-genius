@@ -4,18 +4,22 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Play, CheckCircle, Clock, BookOpen, Trophy } from 'lucide-react';
+import { ArrowLeft, Play, CheckCircle, Clock, BookOpen, Trophy, Volume2, VolumeX } from 'lucide-react';
 import { toast } from 'sonner';
 import { Course, Lesson, CourseService } from '@/services/CourseService';
+import { AudioService } from '@/services/AudioService';
 
 interface CourseDetailProps {
   course: Course;
   onBack: () => void;
   onLessonComplete: (courseId: string, lessonId: string) => void;
+  selectedLanguage?: string;
 }
 
-const CourseDetail = ({ course, onBack, onLessonComplete }: CourseDetailProps) => {
+const CourseDetail = ({ course, onBack, onLessonComplete, selectedLanguage = 'English' }: CourseDetailProps) => {
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const audioService = new AudioService();
 
   const handleLessonClick = (lesson: Lesson) => {
     setSelectedLesson(lesson);
@@ -26,6 +30,26 @@ const CourseDetail = ({ course, onBack, onLessonComplete }: CourseDetailProps) =
       onLessonComplete(course.id, lesson.id);
       toast.success(`Lesson "${lesson.title}" completed! +50 points`);
       setSelectedLesson({ ...lesson, completed: true });
+    }
+  };
+
+  const handlePlayAudio = async (lessonId: string) => {
+    if (!audioService.isSupported()) {
+      toast.error('Audio is not supported in this browser');
+      return;
+    }
+
+    setIsPlayingAudio(true);
+    
+    try {
+      const audioExplanation = audioService.getAudioExplanation(lessonId, selectedLanguage);
+      await audioService.speakText(audioExplanation, selectedLanguage);
+      toast.success('Audio explanation completed');
+    } catch (error) {
+      console.error('Error playing audio:', error);
+      toast.error('Failed to play audio explanation');
+    } finally {
+      setIsPlayingAudio(false);
     }
   };
 
@@ -69,7 +93,28 @@ const CourseDetail = ({ course, onBack, onLessonComplete }: CourseDetailProps) =
             <CardContent>
               <div className="space-y-6">
                 <div className="bg-gray-50 p-6 rounded-lg">
-                  <h3 className="font-semibold mb-3">Lesson Content</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-semibold">Lesson Content</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handlePlayAudio(selectedLesson.id)}
+                      disabled={isPlayingAudio}
+                      className="flex items-center space-x-2"
+                    >
+                      {isPlayingAudio ? (
+                        <>
+                          <VolumeX className="w-4 h-4" />
+                          <span>Playing...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Volume2 className="w-4 h-4" />
+                          <span>Listen in {selectedLanguage}</span>
+                        </>
+                      )}
+                    </Button>
+                  </div>
                   <p className="text-gray-700 leading-relaxed">{selectedLesson.content}</p>
                 </div>
 
@@ -167,6 +212,10 @@ const CourseDetail = ({ course, onBack, onLessonComplete }: CourseDetailProps) =
                         <div className="flex items-center space-x-1 text-xs text-gray-500">
                           <Clock className="w-3 h-3" />
                           <span>{lesson.duration} min</span>
+                        </div>
+                        <div className="flex items-center space-x-1 text-xs text-blue-600">
+                          <Volume2 className="w-3 h-3" />
+                          <span>Audio available</span>
                         </div>
                       </div>
                     </div>
