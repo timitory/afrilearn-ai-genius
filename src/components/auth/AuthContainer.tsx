@@ -15,41 +15,59 @@ const AuthContainer = ({ onAuthSuccess }: AuthContainerProps) => {
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   useEffect(() => {
-    console.log('AuthContainer mounted');
+    console.log('=== AUTH CONTAINER MOUNTED ===');
     
     // Check if Supabase is properly configured
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
     
+    console.log('Checking Supabase configuration...');
+    console.log('URL exists:', !!supabaseUrl);
+    console.log('Key exists:', !!supabaseKey);
+    console.log('URL is placeholder:', supabaseUrl === 'your-supabase-url');
+    console.log('Key is placeholder:', supabaseKey === 'your-supabase-anon-key');
+    
     if (!supabaseUrl || supabaseUrl === 'your-supabase-url' || !supabaseKey || supabaseKey === 'your-supabase-anon-key') {
-      console.error('Supabase is not properly configured. Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment variables.');
+      console.error('❌ Supabase is not properly configured');
       setHasError(true);
+      setErrorMessage('Supabase environment variables are not configured correctly');
       setIsLoading(false);
       return;
     }
 
+    console.log('✅ Supabase configuration looks good, checking user...');
+
     // Check if user is already logged in
     const checkUser = async () => {
       try {
-        console.log('Checking current user...');
+        console.log('Attempting to get current user...');
         const user = await AuthService.getCurrentUser();
-        console.log('Current user:', user);
+        console.log('Current user result:', user);
         
         if (user) {
+          console.log('User found, getting profile...');
           const profile = await AuthService.getUserProfile(user.id);
-          console.log('User profile:', profile);
+          console.log('User profile result:', profile);
           
           if (profile) {
+            console.log('✅ User authenticated with profile, calling onAuthSuccess');
             onAuthSuccess(user, profile);
             return;
+          } else {
+            console.log('⚠️ User found but no profile');
           }
+        } else {
+          console.log('ℹ️ No current user found');
         }
       } catch (error) {
-        console.error('Auth check error:', error);
+        console.error('❌ Auth check error:', error);
         setHasError(true);
+        setErrorMessage(`Authentication check failed: ${error.message}`);
       } finally {
+        console.log('Setting loading to false');
         setIsLoading(false);
       }
     };
@@ -57,32 +75,62 @@ const AuthContainer = ({ onAuthSuccess }: AuthContainerProps) => {
     checkUser();
 
     // Listen for auth changes
+    console.log('Setting up auth state listener...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session);
+      console.log('🔄 Auth state changed:', event, session?.user?.id);
       
       if (event === 'SIGNED_IN' && session?.user) {
+        console.log('User signed in, getting profile...');
         const profile = await AuthService.getUserProfile(session.user.id);
         if (profile) {
+          console.log('✅ Profile found, calling onAuthSuccess');
           onAuthSuccess(session.user, profile);
+        } else {
+          console.log('❌ No profile found for signed in user');
         }
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      console.log('Cleaning up auth listener');
+      subscription.unsubscribe();
+    };
   }, [onAuthSuccess]);
 
   const handleAuthSuccess = async () => {
-    console.log('Auth success handler called');
-    const user = await AuthService.getCurrentUser();
-    if (user) {
-      const profile = await AuthService.getUserProfile(user.id);
-      if (profile) {
-        onAuthSuccess(user, profile);
+    console.log('=== AUTH SUCCESS HANDLER CALLED ===');
+    try {
+      const user = await AuthService.getCurrentUser();
+      console.log('User after auth success:', user);
+      
+      if (user) {
+        const profile = await AuthService.getUserProfile(user.id);
+        console.log('Profile after auth success:', profile);
+        
+        if (profile) {
+          console.log('✅ Calling onAuthSuccess from handler');
+          onAuthSuccess(user, profile);
+        } else {
+          console.log('❌ No profile found in success handler');
+          toast.error('Profile not found');
+        }
+      } else {
+        console.log('❌ No user found in success handler');
+        toast.error('User not found');
       }
+    } catch (error) {
+      console.error('❌ Error in auth success handler:', error);
+      toast.error('Authentication error');
     }
   };
 
+  console.log('=== AUTH CONTAINER RENDER STATE ===');
+  console.log('isLoading:', isLoading);
+  console.log('hasError:', hasError);
+  console.log('errorMessage:', errorMessage);
+
   if (hasError) {
+    console.log('Rendering error state');
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-green-50 flex items-center justify-center p-4">
         <div className="text-center max-w-md">
@@ -90,32 +138,39 @@ const AuthContainer = ({ onAuthSuccess }: AuthContainerProps) => {
             <span className="text-red-500 text-2xl">⚠️</span>
           </div>
           <h2 className="text-xl font-bold text-gray-900 mb-2">Configuration Error</h2>
-          <p className="text-gray-600 mb-4">
-            Supabase is not properly configured. Please set up your environment variables:
-          </p>
+          <p className="text-gray-600 mb-4">{errorMessage}</p>
           <div className="bg-gray-100 p-3 rounded-lg text-left text-sm font-mono mb-4">
             <div>VITE_SUPABASE_URL=your_supabase_url</div>
             <div>VITE_SUPABASE_ANON_KEY=your_supabase_key</div>
           </div>
-          <p className="text-sm text-gray-500">
-            Check the console for more details.
+          <p className="text-sm text-gray-500 mb-4">
+            Please set these environment variables and restart your development server.
           </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+          >
+            Reload Page
+          </button>
         </div>
       </div>
     );
   }
 
   if (isLoading) {
+    console.log('Rendering loading state');
     return (
       <div className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-green-50 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <p className="text-gray-600">Loading authentication...</p>
+          <p className="text-sm text-gray-500 mt-2">Check console for debug info</p>
         </div>
       </div>
     );
   }
 
+  console.log('Rendering auth forms');
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 via-yellow-50 to-green-50 flex items-center justify-center p-4">
       {isLogin ? (

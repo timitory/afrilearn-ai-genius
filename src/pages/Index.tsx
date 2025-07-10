@@ -3,6 +3,7 @@ import { User } from '@supabase/supabase-js';
 import { UserProfile, AuthService } from '@/services/AuthService';
 import AuthContainer from '@/components/auth/AuthContainer';
 import AdminDashboard from '@/components/dashboard/AdminDashboard';
+
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -15,7 +16,7 @@ import CourseDetail from '@/components/CourseDetail';
 import BottomNavigation from '@/components/BottomNavigation';
 
 const Index = () => {
-  console.log('Index component rendering...');
+  console.log('=== INDEX COMPONENT RENDERING ===');
   
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
@@ -69,14 +70,20 @@ const Index = () => {
   };
 
   const handleAuthSuccess = (authUser: User, profile: UserProfile) => {
-    console.log('Auth success in Index:', authUser, profile);
+    console.log('=== AUTH SUCCESS IN INDEX ===');
+    console.log('Auth user:', authUser);
+    console.log('Profile:', profile);
+    
     setUser(authUser);
     setUserProfile(profile);
     
     if (profile.role === 'student') {
+      console.log('Setting up student data...');
       setCourses(CourseService.getCourses());
       setUserProgress(CourseService.getUserProgress());
     }
+    
+    console.log('Auth success completed');
   };
 
   const handleSignOut = async () => {
@@ -103,9 +110,13 @@ const Index = () => {
     setUserProgress(CourseService.getUserProgress());
   };
 
-  console.log('Index render state - user:', user, 'userProfile:', userProfile);
+  console.log('=== INDEX RENDER STATE ===');
+  console.log('user:', user?.id);
+  console.log('userProfile:', userProfile?.role);
+  console.log('selectedCourse:', selectedCourse?.id);
 
   if (selectedCourse) {
+    console.log('Rendering CourseDetail');
     return (
       <CourseDetail
         course={selectedCourse}
@@ -117,7 +128,7 @@ const Index = () => {
   }
 
   if (!user || !userProfile) {
-    console.log('Rendering AuthContainer');
+    console.log('Rendering AuthContainer - user:', !!user, 'profile:', !!userProfile);
     return <AuthContainer onAuthSuccess={handleAuthSuccess} />;
   }
 
