@@ -19,24 +19,6 @@ const AuthContainer = ({ onAuthSuccess }: AuthContainerProps) => {
 
   useEffect(() => {
     console.log('=== AUTH CONTAINER MOUNTED ===');
-    
-    // Check if Supabase is properly configured
-    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-    
-    console.log('Checking Supabase configuration...');
-    console.log('URL exists:', !!supabaseUrl);
-    console.log('Key exists:', !!supabaseKey);
-    console.log('URL is placeholder:', supabaseUrl === 'your-supabase-url');
-    console.log('Key is placeholder:', supabaseKey === 'your-supabase-anon-key');
-    
-    if (!supabaseUrl || supabaseUrl === 'your-supabase-url' || !supabaseKey || supabaseKey === 'your-supabase-anon-key') {
-      console.error('❌ Supabase is not properly configured');
-      setHasError(true);
-      setErrorMessage('Supabase environment variables are not configured correctly');
-      setIsLoading(false);
-      return;
-    }
 
     console.log('✅ Supabase configuration looks good, checking user...');
 
