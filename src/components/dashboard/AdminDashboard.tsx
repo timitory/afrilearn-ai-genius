@@ -20,9 +20,16 @@ interface InstitutionStats {
   institutionCode: string;
 }
 
+interface Student {
+  id: string;
+  email: string;
+  full_name: string;
+  created_at: string;
+}
+
 const AdminDashboard = ({ profile, onSignOut }: AdminDashboardProps) => {
   const [stats, setStats] = useState<InstitutionStats | null>(null);
-  const [students, setStudents] = useState([]);
+  const [students, setStudents] = useState<Student[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
 
   useEffect(() => {
@@ -34,24 +41,39 @@ const AdminDashboard = ({ profile, onSignOut }: AdminDashboardProps) => {
 
     try {
       // Get institution details
-      const { data: institution } = await supabase
+      const { data: institution, error: institutionError } = await supabase
         .from('institutions')
         .select('code')
         .eq('id', profile.institution_id)
         .single();
 
+      if (institutionError) {
+        console.error('Error fetching institution:', institutionError);
+        return;
+      }
+
       // Get students count and stats
-      const { data: studentsData } = await supabase
+      const { data: studentsData, error: studentsError } = await supabase
         .from('user_profiles')
         .select('*')
         .eq('institution_id', profile.institution_id)
         .eq('role', 'student');
 
+      if (studentsError) {
+        console.error('Error fetching students:', studentsError);
+        return;
+      }
+
       // Get lesson completion stats
-      const { data: progressData } = await supabase
+      const studentIds = studentsData?.map(s => s.id) || [];
+      const { data: progressData, error: progressError } = await supabase
         .from('user_progress')
         .select('*')
-        .in('user_id', studentsData?.map(s => s.id) || []);
+        .in('user_id', studentIds);
+
+      if (progressError) {
+        console.error('Error fetching progress:', progressError);
+      }
 
       const totalLessons = progressData?.reduce((sum, p) => sum + (p.lessons_completed || 0), 0) || 0;
       const activeStudents = studentsData?.filter(s => {
@@ -182,7 +204,7 @@ const AdminDashboard = ({ profile, onSignOut }: AdminDashboardProps) => {
             </Card>
           ) : (
             <div className="space-y-3">
-              {students.map((student: any) => (
+              {students.map((student) => (
                 <Card key={student.id} className="border-0 shadow-md">
                   <CardContent className="p-4">
                     <div className="flex items-center justify-between">

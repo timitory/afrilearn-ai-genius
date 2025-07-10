@@ -28,6 +28,14 @@ export class AuthService {
     institution_code?: string;
   }) {
     try {
+      // For students, validate that the institution exists
+      if (userData.role === 'student' && userData.institution_code) {
+        const institution = await this.getInstitutionByCode(userData.institution_code);
+        if (!institution) {
+          return { data: null, error: 'Invalid institution code' };
+        }
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -37,8 +45,34 @@ export class AuthService {
       });
 
       if (error) throw error;
+
+      // If user is admin and signup was successful, create institution
+      if (userData.role === 'admin' && userData.institution_name && data.user) {
+        const institutionResult = await this.createInstitution(userData.institution_name, data.user.id);
+        if (institutionResult.error) {
+          console.error('Institution creation failed:', institutionResult.error);
+        } else {
+          // Update user profile with institution_id
+          await supabase
+            .from('user_profiles')
+            .update({ institution_id: institutionResult.data?.id })
+            .eq('id', data.user.id);
+        }
+      }
+
+      // If user is student, link to institution
+      if (userData.role === 'student' && userData.institution_code && data.user) {
+        const institution = await this.getInstitutionByCode(userData.institution_code);
+        if (institution) {
+          await supabase
+            .from('user_profiles')
+            .update({ institution_id: institution.id })
+            .eq('id', data.user.id);
+        }
+      }
+
       return { data, error: null };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign up error:', error);
       return { data: null, error: error.message };
     }
@@ -53,7 +87,7 @@ export class AuthService {
 
       if (error) throw error;
       return { data, error: null };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign in error:', error);
       return { data: null, error: error.message };
     }
@@ -64,7 +98,7 @@ export class AuthService {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
       return { error: null };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sign out error:', error);
       return { error: error.message };
     }
@@ -114,7 +148,7 @@ export class AuthService {
 
       if (error) throw error;
       return { data, error: null };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Create institution error:', error);
       return { data: null, error: error.message };
     }
