@@ -13,11 +13,20 @@ export interface UserProfile {
 }
 
 export class AuthService {
-  static async signUp(email: string, password: string, fullName: string, role: 'admin' | 'student', institutionData?: { name: string; code: string }) {
+  static async signUp(
+    email: string, 
+    password: string, 
+    metadata: {
+      full_name: string;
+      role: 'admin' | 'student';
+      institution_name?: string;
+      institution_code?: string;
+    }
+  ) {
     console.log('=== SIGNUP ATTEMPT ===');
     console.log('Email:', email);
-    console.log('Role:', role);
-    console.log('Institution data:', institutionData);
+    console.log('Role:', metadata.role);
+    console.log('Metadata:', metadata);
 
     try {
       // First, sign up the user
@@ -26,34 +35,40 @@ export class AuthService {
         password,
         options: {
           data: {
-            full_name: fullName,
-            role: role,
+            full_name: metadata.full_name,
+            role: metadata.role,
           },
         },
       });
 
       if (authError) {
         console.error('❌ Auth signup error:', authError);
-        throw authError;
+        return { data: null, error: authError.message };
       }
 
       if (!authData.user) {
         console.error('❌ No user returned from signup');
-        throw new Error('No user returned from signup');
+        return { data: null, error: 'No user returned from signup' };
       }
 
       console.log('✅ Auth signup successful:', authData.user.id);
 
-      // If admin role and institution data provided, create institution
+      // If admin role and institution name provided, create institution
       let institutionId = null;
-      if (role === 'admin' && institutionData) {
+      if (metadata.role === 'admin' && metadata.institution_name) {
         console.log('Creating institution for admin...');
+        
+        // Generate a unique code for the institution
+        const institutionCode = metadata.institution_name
+          .toUpperCase()
+          .replace(/[^A-Z0-9]/g, '')
+          .substring(0, 6) + Math.random().toString(36).substring(2, 5).toUpperCase();
         
         const { data: institutionResult, error: institutionError } = await supabase
           .from('institutions')
           .insert({
-            name: institutionData.name,
-            code: institutionData.code,
+            name: metadata.institution_name,
+            code: institutionCode,
             admin_id: authData.user.id,
           })
           .select()
@@ -61,11 +76,30 @@ export class AuthService {
 
         if (institutionError) {
           console.error('❌ Institution creation error:', institutionError);
-          throw institutionError;
+          return { data: null, error: institutionError.message };
         }
 
         institutionId = institutionResult.id;
         console.log('✅ Institution created:', institutionId);
+      }
+
+      // If student role and institution code provided, find institution
+      if (metadata.role === 'student' && metadata.institution_code) {
+        console.log('Looking up institution for student...');
+        
+        const { data: institution, error: institutionError } = await supabase
+          .from('institutions')
+          .select('id')
+          .eq('code', metadata.institution_code)
+          .single();
+
+        if (institutionError || !institution) {
+          console.error('❌ Institution lookup error:', institutionError);
+          return { data: null, error: 'Invalid institution code' };
+        }
+
+        institutionId = institution.id;
+        console.log('✅ Institution found:', institutionId);
       }
 
       // Update user profile with institution_id if needed
@@ -79,17 +113,17 @@ export class AuthService {
 
         if (updateError) {
           console.error('❌ Profile update error:', updateError);
-          throw updateError;
+          return { data: null, error: updateError.message };
         }
 
         console.log('✅ Profile updated with institution_id');
       }
 
       console.log('✅ Signup completed successfully');
-      return authData;
+      return { data: authData, error: null };
     } catch (error) {
       console.error('❌ Signup process failed:', error);
-      throw error;
+      return { data: null, error: error instanceof Error ? error.message : 'Signup failed' };
     }
   }
 
@@ -104,11 +138,11 @@ export class AuthService {
 
     if (error) {
       console.error('❌ Signin error:', error);
-      throw error;
+      return { data: null, error: error.message };
     }
 
     console.log('✅ Signin successful:', data.user?.id);
-    return data;
+    return { data, error: null };
   }
 
   static async signOut() {
@@ -180,6 +214,30 @@ export class AuthService {
     } catch (error) {
       console.error('❌ Profile fetch failed:', error);
       throw error;
+    }
+  }
+
+  static async getInstitutionByCode(code: string) {
+    console.log('=== GET INSTITUTION BY CODE ===');
+    console.log('Code:', code);
+
+    try {
+      const { data, error } = await supabase
+        .from('institutions')
+        .select('*')
+        .eq('code', code)
+        .single();
+
+      if (error) {
+        console.error('❌ Institution fetch error:', error);
+        return null;
+      }
+
+      console.log('✅ Institution found:', data);
+      return data;
+    } catch (error) {
+      console.error('❌ Institution fetch failed:', error);
+      return null;
     }
   }
 }
