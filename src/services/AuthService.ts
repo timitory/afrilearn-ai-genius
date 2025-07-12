@@ -53,6 +53,9 @@ export class AuthService {
 
       console.log('✅ Auth signup successful:', authData.user.id);
 
+      // Wait a moment for the trigger to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // If admin role and institution name provided, create institution
       let institutionId = null;
       if (metadata.role === 'admin' && metadata.institution_name) {

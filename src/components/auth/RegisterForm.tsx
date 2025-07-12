@@ -1,264 +1,270 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, Mail, Lock, User, School, Code } from 'lucide-react';
+import { User as SupabaseUser } from '@supabase/supabase-js';
+import { UserProfile, AuthService } from '@/services/AuthService';
 import { toast } from 'sonner';
-import { AuthService } from '@/services/AuthService';
-import { School, User } from 'lucide-react';
-
-const registerSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
-  confirmPassword: z.string(),
-  fullName: z.string().min(2, 'Full name is required'),
-  role: z.enum(['admin', 'student']),
-  institutionName: z.string().optional(),
-  institutionCode: z.string().optional(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
-}).refine((data) => {
-  if (data.role === 'admin' && !data.institutionName) {
-    return false;
-  }
-  if (data.role === 'student' && !data.institutionCode) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Required field for selected role",
-  path: ["institutionName", "institutionCode"],
-});
 
 interface RegisterFormProps {
-  onSuccess: () => void;
-  onSwitchToLogin: () => void;
+  onSuccess: (user: SupabaseUser, profile: UserProfile) => void;
 }
 
-const RegisterForm = ({ onSuccess, onSwitchToLogin }: RegisterFormProps) => {
-  const [isLoading, setIsLoading] = useState(false);
-
-  const form = useForm<z.infer<typeof registerSchema>>({
-    resolver: zodResolver(registerSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-      confirmPassword: '',
-      fullName: '',
-      role: 'student',
-      institutionName: '',
-      institutionCode: '',
-    },
+const RegisterForm = ({ onSuccess }: RegisterFormProps) => {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    confirmPassword: '',
+    fullName: '',
+    role: '' as 'admin' | 'student' | '',
+    institutionName: '',
+    institutionCode: '',
   });
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const selectedRole = form.watch('role');
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+  };
 
-  const onSubmit = async (values: z.infer<typeof registerSchema>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
-    
-    try {
-      // For students, verify institution code exists
-      if (values.role === 'student') {
-        const institution = await AuthService.getInstitutionByCode(values.institutionCode!);
-        if (!institution) {
-          toast.error('Invalid institution code');
-          setIsLoading(false);
-          return;
-        }
-      }
+    setError('');
 
+    // Validation
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Password must be at least 6 characters');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!formData.role) {
+      setError('Please select a role');
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.role === 'admin' && !formData.institutionName.trim()) {
+      setError('Institution name is required for admins');
+      setIsLoading(false);
+      return;
+    }
+
+    if (formData.role === 'student' && !formData.institutionCode.trim()) {
+      setError('Institution code is required for students');
+      setIsLoading(false);
+      return;
+    }
+
+    try {
       const { data, error } = await AuthService.signUp(
-        values.email,
-        values.password,
+        formData.email,
+        formData.password,
         {
-          full_name: values.fullName,
-          role: values.role,
-          institution_name: values.institutionName,
-          institution_code: values.institutionCode,
+          full_name: formData.fullName,
+          role: formData.role,
+          institution_name: formData.role === 'admin' ? formData.institutionName : undefined,
+          institution_code: formData.role === 'student' ? formData.institutionCode : undefined,
         }
       );
 
       if (error) {
+        setError(error);
         toast.error(error);
-      } else {
-        toast.success('Registration successful! Please check your email to verify your account.');
-        onSuccess();
+        return;
+      }
+
+      if (data?.user) {
+        const profile = await AuthService.getUserProfile(data.user.id);
+        if (profile) {
+          toast.success('Account created successfully!');
+          onSuccess(data.user, profile);
+        } else {
+          setError('Failed to load user profile after registration');
+          toast.error('Failed to load user profile after registration');
+        }
       }
     } catch (error) {
-      toast.error('Registration failed');
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card className="w-full max-w-md shadow-2xl border-0">
-      <CardHeader className="text-center space-y-4">
-        <div className="mx-auto w-20 h-20 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-3xl">
-          🎓
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertDescription className="text-red-700">{error}</AlertDescription>
+        </Alert>
+      )}
+
+      <div className="space-y-2">
+        <Label htmlFor="fullName" className="text-sm font-medium text-gray-700">
+          Full Name
+        </Label>
+        <div className="relative">
+          <User className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Input
+            id="fullName"
+            type="text"
+            placeholder="Enter your full name"
+            value={formData.fullName}
+            onChange={(e) => handleInputChange('fullName', e.target.value)}
+            className="pl-10"
+            required
+            disabled={isLoading}
+          />
         </div>
-        <CardTitle className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-          Join STEM Learn AI
-        </CardTitle>
-        <CardDescription className="text-base">
-          Create your account to start learning
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="fullName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Full Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="Enter your full name" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      </div>
 
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input type="email" placeholder="Enter your email" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      <div className="space-y-2">
+        <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+          Email Address
+        </Label>
+        <div className="relative">
+          <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Input
+            id="email"
+            type="email"
+            placeholder="Enter your email"
+            value={formData.email}
+            onChange={(e) => handleInputChange('email', e.target.value)}
+            className="pl-10"
+            required
+            disabled={isLoading}
+          />
+        </div>
+      </div>
 
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Enter your password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      <div className="space-y-2">
+        <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+          Password
+        </Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Input
+            id="password"
+            type="password"
+            placeholder="Create a password"
+            value={formData.password}
+            onChange={(e) => handleInputChange('password', e.target.value)}
+            className="pl-10"
+            required
+            disabled={isLoading}
+          />
+        </div>
+      </div>
 
-            <FormField
-              control={form.control}
-              name="confirmPassword"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Confirm Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Confirm your password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      <div className="space-y-2">
+        <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
+          Confirm Password
+        </Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Input
+            id="confirmPassword"
+            type="password"
+            placeholder="Confirm your password"
+            value={formData.confirmPassword}
+            onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+            className="pl-10"
+            required
+            disabled={isLoading}
+          />
+        </div>
+      </div>
 
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>I am a:</FormLabel>
-                  <FormControl>
-                    <RadioGroup
-                      onValueChange={field.onChange}
-                      defaultValue={field.value}
-                      className="grid grid-cols-2 gap-4"
-                    >
-                      <div className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-gray-50">
-                        <RadioGroupItem value="student" id="student" />
-                        <Label htmlFor="student" className="flex items-center space-x-2 cursor-pointer">
-                          <User className="w-4 h-4" />
-                          <span>Student</span>
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2 border rounded-lg p-3 hover:bg-gray-50">
-                        <RadioGroupItem value="admin" id="admin" />
-                        <Label htmlFor="admin" className="flex items-center space-x-2 cursor-pointer">
-                          <School className="w-4 h-4" />
-                          <span>School Admin</span>
-                        </Label>
-                      </div>
-                    </RadioGroup>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      <div className="space-y-2">
+        <Label className="text-sm font-medium text-gray-700">Role</Label>
+        <Select
+          value={formData.role}
+          onValueChange={(value) => handleInputChange('role', value)}
+          disabled={isLoading}
+        >
+          <SelectTrigger>
+            <SelectValue placeholder="Select your role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="student">Student</SelectItem>
+            <SelectItem value="admin">School Admin</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-            {selectedRole === 'admin' && (
-              <FormField
-                control={form.control}
-                name="institutionName"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Institution Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Enter your school/institution name" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            {selectedRole === 'student' && (
-              <FormField
-                control={form.control}
-                name="institutionCode"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Institution Code</FormLabel>
-                    <FormControl>
-                      <Input 
-                        placeholder="Enter your school's code (from your teacher)" 
-                        {...field} 
-                        className="uppercase"
-                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
-
-            <Button 
-              type="submit" 
-              className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
+      {formData.role === 'admin' && (
+        <div className="space-y-2">
+          <Label htmlFor="institutionName" className="text-sm font-medium text-gray-700">
+            School/Institution Name
+          </Label>
+          <div className="relative">
+            <School className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Input
+              id="institutionName"
+              type="text"
+              placeholder="Enter your school name"
+              value={formData.institutionName}
+              onChange={(e) => handleInputChange('institutionName', e.target.value)}
+              className="pl-10"
+              required={formData.role === 'admin'}
               disabled={isLoading}
-            >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
-            </Button>
-          </form>
-        </Form>
+            />
+          </div>
+        </div>
+      )}
 
-        <div className="text-center mt-4">
-          <p className="text-sm text-gray-600">
-            Already have an account?{' '}
-            <Button variant="ghost" onClick={onSwitchToLogin} className="text-orange-600 hover:text-orange-700 p-0">
-              Sign in
-            </Button>
+      {formData.role === 'student' && (
+        <div className="space-y-2">
+          <Label htmlFor="institutionCode" className="text-sm font-medium text-gray-700">
+            Institution Code
+          </Label>
+          <div className="relative">
+            <Code className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Input
+              id="institutionCode"
+              type="text"
+              placeholder="Enter your school's code"
+              value={formData.institutionCode}
+              onChange={(e) => handleInputChange('institutionCode', e.target.value.toUpperCase())}
+              className="pl-10"
+              required={formData.role === 'student'}
+              disabled={isLoading}
+            />
+          </div>
+          <p className="text-xs text-gray-500">
+            Get this code from your school administrator
           </p>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      <Button
+        type="submit"
+        className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium py-2 px-4 rounded-md transition-all duration-200"
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Creating Account...
+          </>
+        ) : (
+          'Create Account'
+        )}
+      </Button>
+    </form>
   );
 };
 

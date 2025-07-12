@@ -1,119 +1,118 @@
 
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
+import { Label } from '@/components/ui/label';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Loader2, Mail, Lock } from 'lucide-react';
+import { User } from '@supabase/supabase-js';
+import { UserProfile, AuthService } from '@/services/AuthService';
 import { toast } from 'sonner';
-import { AuthService } from '@/services/AuthService';
-
-const loginSchema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(1, 'Password is required'),
-});
 
 interface LoginFormProps {
-  onSuccess: () => void;
-  onSwitchToRegister: () => void;
+  onSuccess: (user: User, profile: UserProfile) => void;
 }
 
-const LoginForm = ({ onSuccess, onSwitchToRegister }: LoginFormProps) => {
+const LoginForm = ({ onSuccess }: LoginFormProps) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const form = useForm<z.infer<typeof loginSchema>>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: {
-      email: '',
-      password: '',
-    },
-  });
-
-  const onSubmit = async (values: z.infer<typeof loginSchema>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     setIsLoading(true);
-    
-    try {
-      const { data, error } = await AuthService.signIn(values.email, values.password);
+    setError('');
 
+    try {
+      const { data, error } = await AuthService.signIn(email, password);
+      
       if (error) {
+        setError(error);
         toast.error(error);
-      } else {
-        toast.success('Welcome back!');
-        onSuccess();
+        return;
+      }
+
+      if (data?.user) {
+        const profile = await AuthService.getUserProfile(data.user.id);
+        if (profile) {
+          toast.success('Successfully signed in!');
+          onSuccess(data.user, profile);
+        } else {
+          setError('Failed to load user profile');
+          toast.error('Failed to load user profile');
+        }
       }
     } catch (error) {
-      toast.error('Login failed');
+      const errorMessage = error instanceof Error ? error.message : 'Login failed';
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Card className="w-full max-w-md shadow-2xl border-0">
-      <CardHeader className="text-center space-y-4">
-        <div className="mx-auto w-20 h-20 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-3xl">
-          🧠
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <Alert className="border-red-200 bg-red-50">
+          <AlertDescription className="text-red-700">{error}</AlertDescription>
+        </Alert>
+      )}
+      
+      <div className="space-y-2">
+        <Label htmlFor="email" className="text-sm font-medium text-gray-700">
+          Email Address
+        </Label>
+        <div className="relative">
+          <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Input
+            id="email"
+            type="email"
+            placeholder="Enter your email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="pl-10"
+            required
+            disabled={isLoading}
+          />
         </div>
-        <CardTitle className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-          Welcome Back
-        </CardTitle>
-        <CardDescription className="text-base">
-          Sign in to continue your STEM journey
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email</FormLabel>
-                  <FormControl>
-                    <Input type="email" placeholder="Enter your email" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+      </div>
 
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Password</FormLabel>
-                  <FormControl>
-                    <Input type="password" placeholder="Enter your password" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <Button 
-              type="submit" 
-              className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Signing In...' : 'Sign In'}
-            </Button>
-          </form>
-        </Form>
-
-        <div className="text-center mt-4">
-          <p className="text-sm text-gray-600">
-            Don't have an account?{' '}
-            <Button variant="ghost" onClick={onSwitchToRegister} className="text-orange-600 hover:text-orange-700 p-0">
-              Sign up
-            </Button>
-          </p>
+      <div className="space-y-2">
+        <Label htmlFor="password" className="text-sm font-medium text-gray-700">
+          Password
+        </Label>
+        <div className="relative">
+          <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+          <Input
+            id="password"
+            type="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="pl-10"
+            required
+            disabled={isLoading}
+          />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <Button
+        type="submit"
+        className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-medium py-2 px-4 rounded-md transition-all duration-200"
+        disabled={isLoading}
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Signing in...
+          </>
+        ) : (
+          'Sign In'
+        )}
+      </Button>
+    </form>
   );
 };
 
