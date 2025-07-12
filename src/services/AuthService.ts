@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import { User } from '@supabase/supabase-js';
 
@@ -29,6 +28,33 @@ export class AuthService {
     console.log('Metadata:', metadata);
 
     try {
+      // If student role and institution code provided, validate it first
+      if (metadata.role === 'student' && metadata.institution_code) {
+        console.log('Validating institution code:', metadata.institution_code);
+        
+        const { data: institution, error: institutionLookupError } = await supabase
+          .from('institutions')
+          .select('id, name, code')
+          .eq('code', metadata.institution_code.toUpperCase())
+          .single();
+
+        console.log('Institution lookup result:', { institution, error: institutionLookupError });
+
+        if (institutionLookupError || !institution) {
+          console.error('❌ Institution lookup failed:', institutionLookupError);
+          
+          // Let's also check what institutions exist for debugging
+          const { data: allInstitutions } = await supabase
+            .from('institutions')
+            .select('code, name');
+          console.log('Available institutions:', allInstitutions);
+          
+          return { data: null, error: 'Invalid institution code. Please check with your school administrator.' };
+        }
+
+        console.log('✅ Institution found:', institution);
+      }
+
       // First, sign up the user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email,
@@ -106,11 +132,11 @@ export class AuthService {
         const { data: institution, error: institutionError } = await supabase
           .from('institutions')
           .select('id')
-          .eq('code', metadata.institution_code)
+          .eq('code', metadata.institution_code.toUpperCase())
           .single();
 
         if (institutionError || !institution) {
-          console.error('❌ Institution lookup error:', institutionError);
+          console.error('❌ Institution lookup error during profile update:', institutionError);
           return { data: null, error: 'Invalid institution code' };
         }
 
@@ -237,7 +263,7 @@ export class AuthService {
       const { data, error } = await supabase
         .from('institutions')
         .select('*')
-        .eq('code', code)
+        .eq('code', code.toUpperCase())
         .single();
 
       if (error) {
