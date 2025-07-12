@@ -54,7 +54,7 @@ export class AuthService {
       console.log('✅ Auth signup successful:', authData.user.id);
 
       // Wait a moment for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // If admin role and institution name provided, create institution
       let institutionId = null;
@@ -65,7 +65,7 @@ export class AuthService {
         const institutionCode = metadata.institution_name
           .toUpperCase()
           .replace(/[^A-Z0-9]/g, '')
-          .substring(0, 6) + Math.random().toString(36).substring(2, 5).toUpperCase();
+          .substring(0, 4) + Math.random().toString(36).substring(2, 6).toUpperCase();
         
         const { data: institutionResult, error: institutionError } = await supabase
           .from('institutions')
@@ -83,7 +83,20 @@ export class AuthService {
         }
 
         institutionId = institutionResult.id;
-        console.log('✅ Institution created:', institutionId);
+        console.log('✅ Institution created:', institutionId, 'with code:', institutionCode);
+
+        // Update user profile with institution_id
+        const { error: updateError } = await supabase
+          .from('user_profiles')
+          .update({ institution_id: institutionId })
+          .eq('id', authData.user.id);
+
+        if (updateError) {
+          console.error('❌ Profile update error:', updateError);
+          return { data: null, error: updateError.message };
+        }
+
+        console.log('✅ Profile updated with institution_id');
       }
 
       // If student role and institution code provided, find institution
@@ -103,12 +116,8 @@ export class AuthService {
 
         institutionId = institution.id;
         console.log('✅ Institution found:', institutionId);
-      }
 
-      // Update user profile with institution_id if needed
-      if (institutionId) {
-        console.log('Updating user profile with institution_id...');
-        
+        // Update user profile with institution_id
         const { error: updateError } = await supabase
           .from('user_profiles')
           .update({ institution_id: institutionId })
