@@ -8,9 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Mic, MicOff, Volume2, Book, Trophy, Users, Globe, MessageSquare, Star, Award } from 'lucide-react';
+import { Mic, MicOff, Volume2, Book, Trophy, Users, Globe, MessageSquare, Star, Award, Play, Pause } from 'lucide-react';
 import { toast } from 'sonner';
-import { useVoiceTutor } from '@/hooks/useVoiceTutor';
+import { useEnhancedVoiceTutor } from '@/hooks/useEnhancedVoiceTutor';
 import { CourseService, Course, UserProgress } from '@/services/CourseService';
 import CourseDetail from '@/components/CourseDetail';
 import BottomNavigation from '@/components/BottomNavigation';
@@ -29,14 +29,17 @@ const Index = () => {
   const {
     isListening,
     isProcessing,
+    isSpeaking,
     currentQuestion,
-    currentAnswer,
+    interimTranscript,
+    currentResponse,
     conversationHistory,
     startListening,
     stopListening,
-    speakAnswer,
+    speakResponse,
+    clearHistory,
     isSupported
-  } = useVoiceTutor(selectedLanguage);
+  } = useEnhancedVoiceTutor(selectedLanguage);
 
   const languages = ['English', 'Yoruba', 'Igbo', 'Hausa'];
 
@@ -65,8 +68,13 @@ const Index = () => {
         return;
       }
       startListening();
-      toast.success('Voice activated! Ask me any STEM question.');
+      toast.success(`Voice activated! Ask me any STEM question in ${selectedLanguage}.`);
     }
+  };
+
+  const handleLanguageChange = (language: string) => {
+    setSelectedLanguage(language);
+    toast.info(`Language changed to ${language}`);
   };
 
   const handleAuthSuccess = (authUser: User, profile: UserProfile) => {
@@ -160,7 +168,15 @@ const Index = () => {
             </div>
             <div className="flex items-center space-x-2">
               <Globe className="w-5 h-5 text-gray-500" />
-              <span className="text-sm text-gray-600">{selectedLanguage}</span>
+              <select 
+                value={selectedLanguage} 
+                onChange={(e) => handleLanguageChange(e.target.value)}
+                className="text-sm text-gray-600 bg-transparent border-none focus:outline-none"
+              >
+                {languages.map(lang => (
+                  <option key={lang} value={lang}>{lang}</option>
+                ))}
+              </select>
             </div>
             <Button onClick={handleSignOut} variant="outline" size="sm">
               Sign Out
@@ -170,15 +186,27 @@ const Index = () => {
       </div>
 
       <div className="p-4 space-y-6">
-        {/* Voice Tutor Section */}
+        {/* Enhanced Voice Tutor Section */}
         <Card className="border-0 shadow-lg bg-gradient-to-r from-purple-500 to-pink-500 text-white">
           <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Mic className="w-6 h-6" />
-              <span>AI Voice Tutor</span>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Mic className="w-6 h-6" />
+                <span>AI Voice Tutor</span>
+              </div>
+              {conversationHistory.length > 0 && (
+                <Button
+                  onClick={clearHistory}
+                  size="sm"
+                  variant="ghost"
+                  className="text-white hover:bg-white/20"
+                >
+                  Clear History
+                </Button>
+              )}
             </CardTitle>
             <CardDescription className="text-purple-100">
-              Ask any STEM question using your voice
+              Ask any STEM question using your voice in {selectedLanguage}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -186,7 +214,7 @@ const Index = () => {
               <Button
                 onClick={toggleVoice}
                 size="lg"
-                disabled={isProcessing || !isSupported}
+                disabled={isProcessing || isSpeaking || !isSupported}
                 className={`rounded-full w-16 h-16 ${
                   isListening 
                     ? 'bg-red-500 hover:bg-red-600 animate-pulse' 
@@ -197,17 +225,39 @@ const Index = () => {
               </Button>
               <div className="text-center">
                 <p className="font-semibold">
-                  {isProcessing ? 'Processing...' : isListening ? 'Listening...' : 'Tap to ask a question'}
+                  {isProcessing 
+                    ? 'Processing...' 
+                    : isSpeaking
+                    ? 'Speaking...'
+                    : isListening 
+                    ? 'Listening...' 
+                    : 'Tap to ask a question'
+                  }
                 </p>
                 <p className="text-sm text-purple-100">
-                  {isProcessing ? 'Thinking about your question' : isListening ? 'Speak now in ' + selectedLanguage : 'Voice in ' + selectedLanguage}
+                  {isProcessing 
+                    ? 'AI is thinking about your question' 
+                    : isSpeaking
+                    ? 'Playing response audio'
+                    : isListening 
+                    ? `Speak now in ${selectedLanguage}` 
+                    : `Voice support for ${selectedLanguage}`
+                  }
                 </p>
               </div>
             </div>
 
+            {/* Interim Transcript Display */}
+            {interimTranscript && (
+              <div className="bg-white/10 rounded-lg p-3 mb-4">
+                <p className="text-sm text-purple-100">Listening...</p>
+                <p className="font-medium italic">{interimTranscript}</p>
+              </div>
+            )}
+
             {/* Current Q&A Display */}
-            {(currentQuestion || currentAnswer) && (
-              <div className="space-y-3 bg-white/10 rounded-lg p-4">
+            {currentResponse && (
+              <div className="space-y-4 bg-white/10 rounded-lg p-4">
                 {currentQuestion && (
                   <div className="flex items-start space-x-2">
                     <MessageSquare className="w-4 h-4 mt-1 text-purple-200" />
@@ -217,25 +267,45 @@ const Index = () => {
                     </div>
                   </div>
                 )}
-                {currentAnswer && (
-                  <div className="flex items-start space-x-2">
-                    <div className="w-4 h-4 mt-1 bg-purple-200 rounded-full"></div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-purple-100">AI Tutor Response:</p>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => speakAnswer(currentAnswer)}
-                          className="text-white hover:bg-white/20 h-auto py-1 px-2"
-                        >
-                          <Volume2 className="w-3 h-3" />
-                        </Button>
-                      </div>
-                      <p className="text-sm leading-relaxed">{currentAnswer}</p>
+                
+                {/* Native Language Response */}
+                <div className="flex items-start space-x-2">
+                  <div className="w-4 h-4 mt-1 bg-purple-200 rounded-full"></div>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm text-purple-100">AI Response ({selectedLanguage}):</p>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => speakResponse(currentResponse.nativeResponse)}
+                        disabled={isSpeaking}
+                        className="text-white hover:bg-white/20 h-auto py-1 px-2"
+                      >
+                        {isSpeaking ? <Pause className="w-3 h-3" /> : <Volume2 className="w-3 h-3" />}
+                      </Button>
                     </div>
+                    <p className="text-sm leading-relaxed mb-3">{currentResponse.nativeResponse}</p>
+                    
+                    {/* English Translation */}
+                    {selectedLanguage !== 'English' && currentResponse.englishResponse !== currentResponse.nativeResponse && (
+                      <div className="border-t border-white/20 pt-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs text-purple-200">English Translation:</p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => speakResponse(currentResponse.englishResponse, 'English')}
+                            disabled={isSpeaking}
+                            className="text-white hover:bg-white/20 h-auto py-1 px-2"
+                          >
+                            <Play className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <p className="text-xs leading-relaxed text-purple-100">{currentResponse.englishResponse}</p>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             )}
 
@@ -343,33 +413,57 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Conversation History */}
+        {/* Enhanced Conversation History */}
         {conversationHistory.length > 0 && (
           <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Questions</h3>
-            <div className="space-y-3">
-              {conversationHistory.slice(-3).reverse().map((conversation, index) => (
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Recent Conversations</h3>
+            <div className="space-y-4">
+              {conversationHistory.slice(0, 5).map((conversation, index) => (
                 <Card key={index} className="border-0 shadow-md">
                   <CardContent className="p-4">
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       <div className="flex items-start space-x-2">
                         <MessageSquare className="w-4 h-4 mt-1 text-gray-400" />
-                        <p className="text-sm text-gray-600">Q: {conversation.question}</p>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-600">Q: {conversation.question}</p>
+                          <p className="text-xs text-gray-400">{conversation.language} • {conversation.timestamp.toLocaleTimeString()}</p>
+                        </div>
                       </div>
+                      
                       <div className="flex items-start space-x-2">
                         <div className="w-4 h-4 mt-1 bg-purple-500 rounded-full"></div>
                         <div className="flex-1">
-                          <div className="flex items-center justify-between">
-                            <p className="text-sm text-gray-900 leading-relaxed">A: {conversation.answer}</p>
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-sm font-medium text-gray-900">A ({conversation.language}):</p>
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => speakAnswer(conversation.answer)}
+                              onClick={() => speakResponse(conversation.nativeResponse, conversation.language)}
+                              disabled={isSpeaking}
                               className="text-gray-500 hover:text-gray-700 h-auto py-1 px-2"
                             >
                               <Volume2 className="w-3 h-3" />
                             </Button>
                           </div>
+                          <p className="text-sm text-gray-700 leading-relaxed mb-2">{conversation.nativeResponse}</p>
+                          
+                          {conversation.language !== 'English' && conversation.englishResponse !== conversation.nativeResponse && (
+                            <div className="border-t border-gray-200 pt-2">
+                              <div className="flex items-center justify-between mb-1">
+                                <p className="text-xs text-gray-500">English:</p>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => speakResponse(conversation.englishResponse, 'English')}
+                                  disabled={isSpeaking}
+                                  className="text-gray-500 hover:text-gray-700 h-auto py-1 px-2"
+                                >
+                                  <Play className="w-3 h-3" />
+                                </Button>
+                              </div>
+                              <p className="text-xs text-gray-600 leading-relaxed">{conversation.englishResponse}</p>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
