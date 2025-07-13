@@ -83,8 +83,9 @@ export class AuthService {
 
       console.log('✅ Auth signup successful:', authData.user.id);
 
-      // Wait a moment for the trigger to create the profile and for auth context to be established
-      await new Promise(resolve => setTimeout(resolve, 3000));
+      // Wait for the trigger to create the profile
+      console.log('Waiting for profile creation...');
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       // For admin users, we need to handle institution creation after authentication is complete
       if (metadata.role === 'admin' && metadata.institution_name) {
@@ -245,40 +246,59 @@ export class AuthService {
     console.log('User ID:', userId);
 
     try {
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select(`
-          *,
-          institutions (
-            name
-          )
-        `)
-        .eq('id', userId)
-        .maybeSingle();
+      // Retry logic to handle timing issues with profile creation
+      let retries = 3;
+      let profile = null;
 
-      if (error) {
-        console.error('❌ Profile fetch error:', error);
-        throw error;
+      while (retries > 0 && !profile) {
+        console.log(`Attempting to fetch profile (${4 - retries}/3)...`);
+        
+        const { data, error } = await supabase
+          .from('user_profiles')
+          .select(`
+            *,
+            institutions (
+              name
+            )
+          `)
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (error) {
+          console.error('❌ Profile fetch error:', error);
+          throw error;
+        }
+
+        if (data) {
+          profile = data;
+          break;
+        }
+
+        retries--;
+        if (retries > 0) {
+          console.log('Profile not found, waiting 1 second before retry...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
 
-      if (!data) {
-        console.log('❌ No profile found');
+      if (!profile) {
+        console.log('❌ No profile found after retries');
         return null;
       }
 
       // Type assertion to ensure role is properly typed
-      const profile: UserProfile = {
-        id: data.id,
-        email: data.email,
-        full_name: data.full_name,
-        role: data.role as 'admin' | 'student',
-        institution_id: data.institution_id,
-        institution_name: data.institutions?.name,
-        created_at: data.created_at,
+      const userProfile: UserProfile = {
+        id: profile.id,
+        email: profile.email,
+        full_name: profile.full_name,
+        role: profile.role as 'admin' | 'student',
+        institution_id: profile.institution_id,
+        institution_name: profile.institutions?.name,
+        created_at: profile.created_at,
       };
 
-      console.log('✅ Profile found:', profile);
-      return profile;
+      console.log('✅ Profile found:', userProfile);
+      return userProfile;
     } catch (error) {
       console.error('❌ Profile fetch failed:', error);
       throw error;
