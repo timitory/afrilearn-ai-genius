@@ -36,13 +36,16 @@ export class AuthService {
           .from('institutions')
           .select('id, name, code')
           .eq('code', metadata.institution_code.toUpperCase())
-          .single();
+          .maybeSingle();
 
         console.log('Institution lookup result:', { institution, error: institutionLookupError });
 
-        if (institutionLookupError || !institution) {
+        if (institutionLookupError) {
           console.error('❌ Institution lookup failed:', institutionLookupError);
-          
+          return { data: null, error: 'Error looking up institution. Please try again.' };
+        }
+
+        if (!institution) {
           // Let's also check what institutions exist for debugging
           const { data: allInstitutions } = await supabase
             .from('institutions')
@@ -101,28 +104,30 @@ export class AuthService {
             admin_id: authData.user.id,
           })
           .select()
-          .single();
+          .maybeSingle();
 
         if (institutionError) {
           console.error('❌ Institution creation error:', institutionError);
           return { data: null, error: institutionError.message };
         }
 
-        institutionId = institutionResult.id;
-        console.log('✅ Institution created:', institutionId, 'with code:', institutionCode);
+        if (institutionResult) {
+          institutionId = institutionResult.id;
+          console.log('✅ Institution created:', institutionId, 'with code:', institutionCode);
 
-        // Update user profile with institution_id
-        const { error: updateError } = await supabase
-          .from('user_profiles')
-          .update({ institution_id: institutionId })
-          .eq('id', authData.user.id);
+          // Update user profile with institution_id
+          const { error: updateError } = await supabase
+            .from('user_profiles')
+            .update({ institution_id: institutionId })
+            .eq('id', authData.user.id);
 
-        if (updateError) {
-          console.error('❌ Profile update error:', updateError);
-          return { data: null, error: updateError.message };
+          if (updateError) {
+            console.error('❌ Profile update error:', updateError);
+            return { data: null, error: updateError.message };
+          }
+
+          console.log('✅ Profile updated with institution_id');
         }
-
-        console.log('✅ Profile updated with institution_id');
       }
 
       // If student role and institution code provided, find institution
@@ -133,10 +138,15 @@ export class AuthService {
           .from('institutions')
           .select('id')
           .eq('code', metadata.institution_code.toUpperCase())
-          .single();
+          .maybeSingle();
 
-        if (institutionError || !institution) {
+        if (institutionError) {
           console.error('❌ Institution lookup error during profile update:', institutionError);
+          return { data: null, error: 'Error looking up institution during profile update' };
+        }
+
+        if (!institution) {
+          console.error('❌ Institution not found during profile update');
           return { data: null, error: 'Invalid institution code' };
         }
 
@@ -224,7 +234,7 @@ export class AuthService {
           )
         `)
         .eq('id', userId)
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('❌ Profile fetch error:', error);
@@ -264,7 +274,7 @@ export class AuthService {
         .from('institutions')
         .select('*')
         .eq('code', code.toUpperCase())
-        .single();
+        .maybeSingle();
 
       if (error) {
         console.error('❌ Institution fetch error:', error);
