@@ -83,14 +83,26 @@ export class AuthService {
 
       console.log('✅ Auth signup successful:', authData.user.id);
 
-      // Wait for the trigger to create the profile
+      // Wait longer for the trigger to create the profile
       console.log('Waiting for profile creation...');
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 3000));
 
-      // For admin users, we need to handle institution creation after authentication is complete
+      // For admin users, create institution using the user ID directly
       if (metadata.role === 'admin' && metadata.institution_name) {
-        console.log('Admin signup detected, will create institution after authentication is complete');
-        // We'll handle institution creation in a separate call after the user is fully authenticated
+        console.log('Creating institution for admin user...');
+        
+        const { error: institutionError } = await this.createInstitutionForUser(
+          authData.user.id, 
+          metadata.institution_name
+        );
+        
+        if (institutionError) {
+          console.error('Failed to create institution:', institutionError);
+          // Don't return error here - the user account was created successfully
+          // We'll handle this in the UI
+        } else {
+          console.log('✅ Institution created successfully');
+        }
       }
 
       // If student role and institution code provided, find institution and update profile
@@ -138,16 +150,12 @@ export class AuthService {
     }
   }
 
-  static async createInstitutionForAdmin(institutionName: string) {
-    console.log('=== CREATE INSTITUTION FOR ADMIN ===');
+  static async createInstitutionForUser(userId: string, institutionName: string) {
+    console.log('=== CREATE INSTITUTION FOR USER ===');
+    console.log('User ID:', userId);
     console.log('Institution name:', institutionName);
 
     try {
-      const user = await this.getCurrentUser();
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
       // Generate a unique code for the institution
       const institutionCode = institutionName
         .toUpperCase()
@@ -161,18 +169,18 @@ export class AuthService {
         .insert({
           name: institutionName,
           code: institutionCode,
-          admin_id: user.id,
+          admin_id: userId,
         })
         .select()
         .maybeSingle();
 
       if (institutionError) {
         console.error('❌ Institution creation error:', institutionError);
-        throw new Error(institutionError.message);
+        return { data: null, error: institutionError.message };
       }
 
       if (!institutionResult) {
-        throw new Error('Failed to create institution');
+        return { data: null, error: 'Failed to create institution' };
       }
 
       console.log('✅ Institution created:', institutionResult.id, 'with code:', institutionCode);
@@ -181,15 +189,32 @@ export class AuthService {
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update({ institution_id: institutionResult.id })
-        .eq('id', user.id);
+        .eq('id', userId);
 
       if (updateError) {
         console.error('❌ Profile update error:', updateError);
-        throw new Error(updateError.message);
+        return { data: null, error: updateError.message };
       }
 
       console.log('✅ Profile updated with institution_id');
       return { data: institutionResult, error: null };
+    } catch (error) {
+      console.error('❌ Institution creation failed:', error);
+      return { data: null, error: error instanceof Error ? error.message : 'Institution creation failed' };
+    }
+  }
+
+  static async createInstitutionForAdmin(institutionName: string) {
+    console.log('=== CREATE INSTITUTION FOR ADMIN ===');
+    console.log('Institution name:', institutionName);
+
+    try {
+      const user = await this.getCurrentUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
+
+      return await this.createInstitutionForUser(user.id, institutionName);
     } catch (error) {
       console.error('❌ Institution creation failed:', error);
       return { data: null, error: error instanceof Error ? error.message : 'Institution creation failed' };
@@ -247,11 +272,11 @@ export class AuthService {
 
     try {
       // Retry logic to handle timing issues with profile creation
-      let retries = 3;
+      let retries = 5;
       let profile = null;
 
       while (retries > 0 && !profile) {
-        console.log(`Attempting to fetch profile (${4 - retries}/3)...`);
+        console.log(`Attempting to fetch profile (${6 - retries}/5)...`);
         
         const { data, error } = await supabase
           .from('user_profiles')
@@ -276,8 +301,8 @@ export class AuthService {
 
         retries--;
         if (retries > 0) {
-          console.log('Profile not found, waiting 1 second before retry...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
+          console.log('Profile not found, waiting 2 seconds before retry...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
       }
 

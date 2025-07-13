@@ -86,24 +86,9 @@ const RegisterForm = ({ onSuccess }: RegisterFormProps) => {
       }
 
       if (data?.user) {
-        // For admin users, create the institution after successful signup
-        if (formData.role === 'admin' && formData.institutionName) {
-          console.log('Creating institution for admin user after signup...');
-          
-          const { error: institutionError } = await AuthService.createInstitutionForAdmin(formData.institutionName);
-          
-          if (institutionError) {
-            console.error('Failed to create institution:', institutionError);
-            toast.error('Account created but failed to create institution. Please contact support.');
-            // Still proceed with login since the user account was created successfully
-          } else {
-            toast.success('Account and institution created successfully!');
-          }
-        } else {
-          toast.success('Account created successfully!');
-        }
+        toast.success('Account created successfully!');
 
-        // Fetch the updated profile (which should now include institution info for admins)
+        // Fetch the user profile
         const profile = await AuthService.getUserProfile(data.user.id);
         if (profile) {
           onSuccess(data.user, profile);
